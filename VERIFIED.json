@@ -1,0 +1,120 @@
+[
+  {
+    "archive": "both.zip",
+    "file": "落日航行_演示_00-02.25_00-05.75_无声视频.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540,
+          "duration": "3.500000"
+        }
+      ],
+      "format": {
+        "duration": "3.500000"
+      }
+    },
+    "passed": true
+  },
+  {
+    "archive": "both.zip",
+    "file": "落日航行_演示_00-02.25_00-05.75_独立音频.mp3",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "duration": "3.500000"
+        }
+      ],
+      "format": {
+        "duration": "3.500000"
+      }
+    },
+    "passed": true
+  },
+  {
+    "archive": "no-audio.zip",
+    "file": "silent_00-00.00_00-08.00_无声视频.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 960,
+          "height": 540,
+          "duration": "8.000000"
+        }
+      ],
+      "format": {
+        "duration": "8.000000"
+      }
+    },
+    "passed": true
+  },
+  {
+    "archive": "webm.zip",
+    "file": "sample_00-01.00_00-03.00_无声视频.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 320,
+          "height": 180,
+          "duration": "2.000000"
+        }
+      ],
+      "format": {
+        "duration": "2.000000"
+      }
+    },
+    "passed": true
+  },
+  {
+    "archive": "webm.zip",
+    "file": "sample_00-01.00_00-03.00_独立音频.mp3",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "codec_type": "audio",
+          "duration": "2.000000"
+        }
+      ],
+      "format": {
+        "duration": "2.000000"
+      }
+    },
+    "passed": true
+  },
+  {
+    "file": "audio.wav",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio"
+        }
+      ],
+      "format": {
+        "duration": "3.500000"
+      }
+    },
+    "passed": true
+  }
+]

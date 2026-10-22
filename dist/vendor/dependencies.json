@@ -1,0 +1,29 @@
+[
+  {
+    "package": "@ffmpeg/ffmpeg",
+    "version": "0.12.15",
+    "tarball_bytes": 18455,
+    "source": {
+      "url": "git+https://github.com/ffmpegwasm/ffmpeg.wasm.git",
+      "type": "git"
+    }
+  },
+  {
+    "package": "@ffmpeg/core",
+    "version": "0.12.10",
+    "tarball_bytes": 20634719,
+    "source": {
+      "url": "git+https://github.com/ffmpegwasm/ffmpeg.wasm.git",
+      "type": "git"
+    }
+  },
+  {
+    "package": "fflate",
+    "version": "0.8.2",
+    "tarball_bytes": 168507,
+    "source": {
+      "url": "git+https://github.com/101arrowz/fflate.git",
+      "type": "git"
+    }
+  }
+]

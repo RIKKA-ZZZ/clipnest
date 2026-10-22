@@ -1,0 +1,10 @@
+{
+  "name": "clipnest",
+  "private": true,
+  "version": "1.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "node --check dist/app.js && node scripts/check-static.mjs"
+  }
+}

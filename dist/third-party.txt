@@ -1,0 +1,26 @@
+ClipNest / 片刻 — Third-party components
+
+@ffmpeg/ffmpeg 0.12.15
+https://github.com/ffmpegwasm/ffmpeg.wasm
+License: MIT (see vendor/ffmpeg/LICENSE)
+
+@ffmpeg/core 0.12.10
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core
+FFmpeg and its compiled external libraries retain their original licenses.
+This core includes GPL components, including x264. See vendor/core/LICENSE.
+Corresponding build sources and build instructions:
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/build
+https://github.com/ffmpegwasm/ffmpeg.wasm/releases/tag/v0.12.10
+https://github.com/FFmpeg/FFmpeg
+https://www.videolan.org/developers/x264.html
+
+fflate 0.8.2
+https://github.com/101arrowz/fflate
+License: MIT (see vendor/fflate/LICENSE)
+
+Pinned versions, source package information and verified download sizes:
+vendor/dependencies.json
+
+The included demo is an original programmatically drawn 8-second landscape
+with synthesized audio, created for this project.
+No video, analytics, remote font, or user media upload service is used.
