@@ -83,15 +83,21 @@ export function createLocalEngine({cacheRoot,ffmpegCommand='ffmpeg',ffprobeComma
   async function run(job,source,o){
     try{
       await fsp.mkdir(job.directory,{recursive:true});check(job);const hasAudio=source.info.streams.some(s=>s.codec_type==='audio');
-      if(o.audio&&!o.video&&!hasAudio)throw new Error('这个视频没有音轨。请勾选“无声视频”导出画面。');
-      if(o.audio&&!hasAudio)job.warning='原视频没有音轨，已跳过音频，仅生成无声视频。';
-      const span=90/(Number(o.video)+Number(o.audio&&hasAudio)),duration=o.end-o.start,common=['-ss',o.start.toFixed(3),'-i',source.path,'-t',duration.toFixed(3)];let completed=0;
+      if(o.audio&&!o.video&&!o.muxed&&!hasAudio)throw new Error('这个视频没有音轨。请勾选视频选项导出画面。');
+      if(!hasAudio&&(o.audio||o.muxed))job.warning=`原视频没有音轨。${o.audio?'已跳过独立音频。':''}${o.muxed?'保留原声视频仅包含画面。':''}`;
+      const span=90/(Number(o.video)+Number(o.audio&&hasAudio)+Number(o.muxed)),duration=o.end-o.start,common=['-ss',o.start.toFixed(3),'-i',source.path,'-t',duration.toFixed(3)];let completed=0;
       const add=async(key,name,type,kind)=>{const filename=path.join(job.directory,key);job.files.push({key,path:filename,name,type,kind,size:(await fsp.stat(filename)).size});};
       if(o.video){job.title='正在生成无声视频…';job.detail='从本机磁盘读取素材，进度来自实际已编码时长。';await encode(job,[...common,'-map','0:v:0','-an','-c:v','libx264','-preset','veryfast','-crf','20','-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2','-pix_fmt','yuv420p','-movflags','+faststart','-map_metadata','-1',path.join(job.directory,'clip.mp4')],{start:5,span,duration});check(job);await add('clip.mp4',`${job.base}_无声视频.mp4`,'video/mp4','无声视频');completed++;}
+      if(o.muxed){
+        job.title='正在生成有声视频…';job.detail='将选中范围的画面与原声一起保留。';
+        const audio=hasAudio?['-map','0:a:0','-c:a','aac','-b:a','192k']:['-an'];
+        await encode(job,[...common,'-map','0:v:0',...audio,'-c:v','libx264','-preset','veryfast','-crf','20','-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2','-pix_fmt','yuv420p','-movflags','+faststart','-map_metadata','-1',path.join(job.directory,'muxed.mp4')],{start:5+completed*span,span,duration});
+        check(job);await add('muxed.mp4',`${job.base}_保留原声视频.mp4`,'video/mp4',hasAudio?'有声视频':'视频（原素材无音轨）');completed++;
+      }
       if(o.audio&&hasAudio){
         job.title='正在提取独立音频…';job.detail=`正在生成 ${o.format.toUpperCase()}，保留选中范围内的混合声音。`;const codec=o.format==='wav'?['-c:a','pcm_s16le']:['-c:a','libmp3lame','-q:a','2'];
         try{await encode(job,[...common,'-map','0:a:0','-vn',...codec,'-map_metadata','-1',path.join(job.directory,`clip.${o.format}`)],{start:5+completed*span,span,duration});check(job);await add(`clip.${o.format}`,`${job.base}_独立音频.${o.format}`,o.format==='wav'?'audio/wav':'audio/mpeg',`${o.format.toUpperCase()} 音频`);}
-        catch(e){check(job);if(!job.files.length)throw e;job.warning='无声视频已生成，但音频导出失败，可尝试另一种格式。';}
+        catch(e){check(job);if(!job.files.length)throw e;job.warning='视频已生成，但独立音频导出失败，可尝试另一种格式。';}
       }
       check(job);job.title='正在打包你的片段…';job.detail='输出已在本机磁盘生成，打包后可直接下载。';job.progress=95;
       if(job.files.reduce((sum,f)=>sum+f.size,0)<=2*1024**3){try{await bundle(job,`片刻 ClipNest\n原素材：${source.name}\n开始：${o.start} 秒\n结束：${o.end} 秒\n时长：${duration} 秒\n${job.warning||''}\n仅在本机处理，没有云端上传。\n`);}catch(e){check(job);job.warning=(job.warning||'')+' ZIP 打包失败，请分别下载已生成的文件。';}}
@@ -124,9 +130,9 @@ export function createLocalEngine({cacheRoot,ffmpegCommand='ffmpeg',ffprobeComma
       if(m&&['GET','HEAD'].includes(req.method)){const s=media.get(m[1]);if(!s)json(res,404,{error:'素材已失效，请重新选择。'});else sendFile(req,res,s.path,{type:MIME[path.extname(s.name).toLowerCase()]});return true;}
       if(url.pathname==='/api/jobs'&&req.method==='POST'){
         if([...jobs.values()].some(j=>j.status==='running')){json(res,409,{error:'已有片段正在处理，请完成或取消后重试。'});return true;}
-        const o=await readJSON(req),s=media.get(o.mediaId);if(!s)throw new Error('素材已失效，请重新选择。');
+        const o=await readJSON(req),s=media.get(o.mediaId);if(!s)throw new Error('素材已失效，请重新选择。');o.muxed??=false;
         if(typeof o.start!=='number'||typeof o.end!=='number'||!Number.isFinite(o.start)||!Number.isFinite(o.end)||o.start<0||o.end>s.info.duration+.02||o.end-o.start<.039)throw new Error('片段时间范围无效。');
-        if(typeof o.video!=='boolean'||typeof o.audio!=='boolean'||(!o.video&&!o.audio)||!['mp3','wav'].includes(o.format))throw new Error('导出设置无效。');
+        if(typeof o.video!=='boolean'||typeof o.audio!=='boolean'||typeof o.muxed!=='boolean'||(!o.video&&!o.audio&&!o.muxed)||!['mp3','wav'].includes(o.format))throw new Error('导出设置无效。');
         const id=randomUUID(),job={id,directory:path.join(root,'jobs',id),base:safeName(o.base||'clip'),status:'running',started:Date.now(),progress:3,title:'正在准备本机处理…',detail:'从磁盘读取，不把整个视频塞进浏览器内存。',files:[]};jobs.set(id,job);json(res,202,{id});void run(job,s,o);return true;
       }
       const j=/^\/api\/jobs\/([a-f0-9-]+)(?:\/(cancel|files)(?:\/([^/]+))?)?$/.exec(url.pathname);

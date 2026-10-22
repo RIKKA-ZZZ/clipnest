@@ -57,9 +57,9 @@ function importToLocal(file,token) {
     xhr.onabort=()=>{state.upload=null;reject(new DOMException('Cancelled','AbortError'));};xhr.send(file);
   });
 }
-async function exportOnLocal(token,base,wantVideo,wantAudio,format) {
+async function exportOnLocal(token,base,wantVideo,wantAudio,format,wantMuxed) {
   const source=state.file.nativeId?state.file:state.nativeSource||await importToLocal(state.file,token);checkJob(token);state.nativeSource=source;
-  const response=await localRequest('/api/jobs',{mediaId:source.nativeId,start:state.start,end:state.end,video:wantVideo,audio:wantAudio,format,base});
+  const response=await localRequest('/api/jobs',{mediaId:source.nativeId,start:state.start,end:state.end,video:wantVideo,audio:wantAudio,muxed:wantMuxed,format,base});
   if(token!==state.job){await localRequest(`/api/jobs/${response.id}/cancel`,{});checkJob(token);}
   state.nativeJob=response.id;
   try{
@@ -93,7 +93,7 @@ function objectURL(blob) { const url = URL.createObjectURL(blob); state.urls.pus
 function clearResults() { state.urls.forEach((url) => URL.revokeObjectURL(url)); state.urls = []; ui.resultFiles.replaceChildren(); ui.results.hidden = true; }
 function updateControls() {
   const ready = !!state.file && state.duration >= MIN_CLIP;
-  const outputs = Number(ui.exportVideo.checked) + Number(ui.exportAudio.checked);
+  const outputs = Number(ui.exportVideo.checked) + Number(ui.exportAudio.checked) + Number(ui.exportMuxed.checked);
   ui.exportButton.disabled = state.busy || state.picking || !ready || !outputs;
   for (const el of [ui.chooseButton, ui.replaceButton, ui.demoButton, ui.fileInput]) el.disabled = state.busy || state.picking || !state.capReady;
   ui.timeFieldset.disabled = state.busy || !ready;
@@ -307,7 +307,7 @@ function renderResults(files, warning, elapsed, base, nativeZip) {
     title.textContent = item.name; title.title = item.name; detail.textContent = `${item.kind} · ${size(item.size??item.data.byteLength)}`;
     copy.append(title,detail);card.append(copy,link);ui.resultFiles.append(card);
   }
-  const readme = `片刻 ClipNest\n\n原素材：${state.file.name}\n开始时间：${time(state.start)}\n结束时间：${time(state.end)}\n选中时长：${time(state.end-state.start)}\n\nMP4 为无声视频；MP3/WAV 为原视频选中范围的混合音轨。\n重新编码可能产生不到一帧/一个音频编码帧的时长差。\n${warning}\n\n文件在浏览器本地生成，未上传视频。\n`;
+  const readme = `片刻 ClipNest\n\n原素材：${state.file.name}\n开始时间：${time(state.start)}\n结束时间：${time(state.end)}\n选中时长：${time(state.end-state.start)}\n\n“保留原声视频.mp4”保留画面与原声；“无声视频.mp4”仅包含画面；MP3/WAV 为选中范围的混合音轨。\n重新编码可能产生不到一帧/一个音频编码帧的时长差。\n${warning}\n\n文件在浏览器本地生成，未上传视频。\n`;
   zipFiles['片段说明.txt'] = strToU8(readme);
   ui.zipDownload.hidden=nativeZip===null;
   if(nativeZip){ui.zipDownload.href=nativeZip.url;ui.zipDownload.download=nativeZip.name;}
@@ -318,17 +318,17 @@ function renderResults(files, warning, elapsed, base, nativeZip) {
 async function exportClip() {
   if (state.busy || !state.file) return;
   if (ui.startTime.value !== time(state.start) || ui.endTime.value !== time(state.end)) { message('请先确认起止时间，再开始导出。'); return; }
-  const wantVideo = ui.exportVideo.checked, wantAudio = ui.exportAudio.checked;
-  if (!wantVideo && !wantAudio) { message('请至少选择一种导出内容。'); return; }
+  const wantVideo = ui.exportVideo.checked, wantAudio = ui.exportAudio.checked, wantMuxed=ui.exportMuxed.checked;
+  if (!wantVideo && !wantAudio && !wantMuxed) { message('请至少选择一种导出内容。'); return; }
   if (state.end-state.start < MIN_CLIP-.001) { message('请先选择至少 0.04 秒的片段。'); return; }
   const token = ++state.job, started = performance.now(), base = filenameBase(state.file.name);
   const duration = state.end-state.start, format = ui.audioFormat.value;
-  const tempFiles = ['input','clip.mp4',`clip.${format}`,'probe.json'];
+  const tempFiles = ['input','clip.mp4','muxed.mp4',`clip.${format}`,'probe.json'];
   let ffmpeg,mounted=false;
   clearResults(); message(''); state.previewing = false; ui.video.pause(); setBusy(true); state.phaseSpan = 0;
   progress('正在开始导出…','正在准备选中的片段，请保持页面打开。',0);
   try {
-    if(state.native?.available){await exportOnLocal(token,base,wantVideo,wantAudio,format);return;}
+    if(state.native?.available){await exportOnLocal(token,base,wantVideo,wantAudio,format,wantMuxed);return;}
     ffmpeg = await engine(token); checkJob(token);
     progress('正在读取本地视频…', '只读挂载素材，避免把整个文件复制到浏览器内存。',13);
     await ffmpeg.createDir('/source').catch(()=>{});
@@ -336,9 +336,9 @@ async function exportClip() {
     const info = await probe(ffmpeg,'/source/input',token);
     if (!info.streams?.some((s) => s.codec_type === 'video')) throw new Error('文件中没有可读取的视频轨道。');
     const hasAudio = info.streams.some((s) => s.codec_type === 'audio');
-    if (wantAudio && !wantVideo && !hasAudio) throw new Error('这个视频没有音轨。请勾选“无声视频”导出画面。');
-    const files = [], stepCount = Number(wantVideo) + Number(wantAudio && hasAudio);
-    let completed = 0, warning = wantAudio && !hasAudio ? '原视频没有音轨，已跳过音频，仅生成无声视频。' : '';
+    if (wantAudio && !wantVideo && !wantMuxed && !hasAudio) throw new Error('这个视频没有音轨。请勾选视频选项导出画面。');
+    const files = [], stepCount = Number(wantVideo) + Number(wantAudio && hasAudio) + Number(wantMuxed);
+    let completed = 0, warning = !hasAudio && (wantAudio||wantMuxed) ? `原视频没有音轨。${wantAudio?'已跳过独立音频。':''}${wantMuxed?'保留原声视频仅包含画面。':''}` : '';
     const common = ['-ss',state.start.toFixed(3),'-i','/source/input','-t',duration.toFixed(3)];
     if (wantVideo) {
       state.phaseStart = 18; state.phaseSpan = 76 / stepCount;
@@ -352,6 +352,16 @@ async function exportClip() {
       files.push({name:`${base}_无声视频.mp4`,data,type:'video/mp4',kind:'无声视频'}); completed++;
       await ffmpeg.deleteFile('clip.mp4');
     }
+    if(wantMuxed){
+      state.phaseStart=18+completed*76/stepCount;state.phaseSpan=76/stepCount;
+      progress('正在生成有声视频…','将选中范围内的画面和原声保留在同一个 MP4 中。',state.phaseStart);state.logs=[];
+      const audio=hasAudio?['-map','0:a:0','-c:a','aac','-b:a','192k']:['-an'];
+      const result=await ffmpeg.exec([...common,'-map','0:v:0',...audio,'-c:v','libx264','-preset','ultrafast','-crf','20','-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2','-pix_fmt','yuv420p','-movflags','+faststart','-map_metadata','-1','muxed.mp4']);
+      checkJob(token);if(result!==0)throw new Error('有声视频导出失败，请尝试更短片段或检查素材编码。');
+      const data=await ffmpeg.readFile('muxed.mp4');if(!data.byteLength)throw new Error('导出视频为空，请检查选择的时间范围。');
+      files.push({name:`${base}_保留原声视频.mp4`,data,type:'video/mp4',kind:hasAudio?'有声视频':'视频（原素材无音轨）'});completed++;
+      await ffmpeg.deleteFile('muxed.mp4');
+    }
     if (wantAudio && hasAudio) {
       state.phaseStart = 18 + completed * 76 / stepCount; state.phaseSpan = 76 / stepCount;
       progress('正在提取独立音频…', `生成 ${format.toUpperCase()} 音频，保留选中片段中的原始混合声音。`,state.phaseStart);
@@ -359,7 +369,7 @@ async function exportClip() {
       const codec = format === 'wav' ? ['-c:a','pcm_s16le'] : ['-c:a','libmp3lame','-q:a','2'];
       const result = await ffmpeg.exec([...common,'-map','0:a:0','-vn',...codec,'-map_metadata','-1',`clip.${format}`]);
       checkJob(token);
-      if (result !== 0) { if (!files.length) throw new Error('音频导出失败，当前音频编码可能不受支持。'); warning = '无声视频已生成，但音频导出失败。可尝试改用另一种音频格式。'; }
+      if (result !== 0) { if (!files.length) throw new Error('音频导出失败，当前音频编码可能不受支持。'); warning = '视频已生成，但独立音频导出失败。可尝试改用另一种音频格式。'; }
       else { const data = await ffmpeg.readFile(`clip.${format}`); if (data.byteLength) files.push({name:`${base}_独立音频.${format}`,data,type:format==='wav'?'audio/wav':'audio/mpeg',kind:`${format.toUpperCase()} 音频`}); }
     }
     checkJob(token); state.phaseSpan = 0;
@@ -405,7 +415,7 @@ ui.markStart.addEventListener('click',() => { if (ui.video.hidden) { message('�
 ui.markEnd.addEventListener('click',() => { if (ui.video.hidden) { message('当前视频无法预览，请手动输入结束时间。'); return; } state.end=Math.max(state.start+MIN_CLIP,Math.min(state.duration,ui.video.currentTime));message('');updateRange(); });
 ui.previewSelection.addEventListener('click',async() => { ui.video.currentTime=state.start;state.previewing=true;try{await ui.video.play();}catch{state.previewing=false;message('自动播放未开始，请点击视频中的播放按钮。');} });
 ui.video.addEventListener('timeupdate',() => { if(state.duration)ui.playhead.style.left=`${Math.min(100,ui.video.currentTime/state.duration*100)}%`;if(state.previewing&&ui.video.currentTime>=state.end-.02){ui.video.pause();state.previewing=false;ui.video.currentTime=state.end;} });
-for (const input of [ui.exportVideo,ui.exportAudio,ui.audioFormat]) input.addEventListener('change',updateControls);
+for (const input of [ui.exportVideo,ui.exportAudio,ui.exportMuxed,ui.audioFormat]) input.addEventListener('change',updateControls);
 ui.exportButton.addEventListener('click',() => void exportClip());
 function cancelProcessing(){
   ++state.job;state.controller?.abort();state.upload?.abort();
